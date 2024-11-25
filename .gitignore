@@ -1,0 +1,20 @@
+# Byte-compiled Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment directories
+.venv/
+env/
+venv/
+
+# IDE-specific files
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+
+
+train.py
