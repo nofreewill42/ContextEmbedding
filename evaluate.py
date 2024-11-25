@@ -4,18 +4,28 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Qwen2TokenizerFast
 from torch.optim import AdamW
 
 
-# Setup
-#model_name = "Qwen/Qwen2.5-Coder-3B-instruct"
-model_name = "checkpoints/final_model"
-print(f"Loading model: {model_name}\n")
-model = AutoModelForCausalLM.from_pretrained(model_name)
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+# Load quantized base model
+base_model = AutoModelForCausalLM.from_pretrained(
+   "Qwen/Qwen2.5-Coder-14B-instruct", 
+   quantization_config=BitsAndBytesConfig(
+       load_in_4bit=True,
+       bnb_4bit_quant_type="nf4",
+       bnb_4bit_compute_dtype=torch.bfloat16
+   )
+)
+
+# Load adapter and tokenizer
+model = PeftModel.from_pretrained(base_model, "checkpoints/final_model")
+tokenizer = AutoTokenizer.from_pretrained("checkpoints/final_model") 
+model.eval()
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}\n")
 model = model.to(device)
-print(f'Default model training mode for AutoModelForCausalLM: {model.training}')
-model.train()
-print(f'Updated mode: {model.training}')
+
 
 embedding_text = "<|fim_middle|>"
 system_prompts = {
@@ -25,7 +35,7 @@ system_prompts = {
 conversations = [
     [
         system_prompts['default'],
-        {'role': 'user', 'content': "What is the color of the sky?\n" + embedding_text + "\n"},
+        {'role': 'user', 'content': "fundamentals\n" + embedding_text + "\n"},
     ],
 ]
 
@@ -77,7 +87,7 @@ for conversation in conversations:
                             max_new_tokens=32,
                             eos_token_id=None)
 
-    result_text = tokenizer.decode(result.tolist())
+    result_text = tokenizer.decode(result.tolist()[0])
     print(result_text)
 
 # Example output without fine-tuning:

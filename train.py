@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.amp import GradScaler, autocast
 from torch.optim import AdamW
 from torch.nn.utils import clip_grad_norm_
-from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
+from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup, Qwen2ForCausalLM
 
 
 import random
@@ -11,13 +11,46 @@ from tqdm import tqdm
 from pathlib import Path
 import json
 
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from transformers import BitsAndBytesConfig
+
+
 # Setup
-model_name = "Qwen/Qwen2.5-Coder-0.5B-instruct"
-model = AutoModelForCausalLM.from_pretrained(model_name)
+model_name = "Qwen/Qwen2.5-Coder-14B-instruct"
+#model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = model.to(device)
-model.train()
+#model = model.to(device)
+#model.train()
+
+# Quantization config
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16
+)
+
+# Load model in 4-bit
+model = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    quantization_config=bnb_config,
+    device_map=device#"auto"
+)
+
+# Prepare for training
+model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=False)
+
+# LoRA config
+lora_config = LoraConfig(
+    r=16,
+    lora_alpha=16,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
+    bias="none",
+    task_type="CAUSAL_LM"
+)
+
+# Apply LoRA
+model = get_peft_model(model, lora_config)
 
 # Training data
 embedding_text = "<|fim_middle|>"
@@ -30,8 +63,20 @@ conversations = [
     [
         system_prompts['default'],
         {'role': 'user', 'content': f"{conversation['question']}\n{embedding_text}\n"},
-        {'role': 'assistant', 'content': conversation['answer']},
-    ] for conversation in conversations
+        {'role': 'assistant', 'content': conversation['question']},#{'role': 'assistant', 'content': conversation['answer']},
+    ] for conversation in conversations if 'question' in conversation
+] + [
+    [
+        system_prompts['default'],
+        {'role': 'user', 'content': f"{conversation['answer']}\n{embedding_text}\n"},
+        {'role': 'assistant', 'content': conversation['answer']},#{'role': 'assistant', 'content': conversation['answer']},
+    ] for conversation in conversations if 'answer' in conversation
+] + [
+    [
+        system_prompts['default'],
+        {'role': 'user', 'content': f"{conversation['text']}\n{embedding_text}\n"},
+        {'role': 'assistant', 'content': conversation['text']},#{'role': 'assistant', 'content': conversation['answer']},
+    ] for conversation in conversations if 'text' in conversation
 ]
 
 
@@ -61,7 +106,7 @@ def train_conversation(model, conversation, tokenizer, device, scaler):
 
     with autocast(device_type=str(device), dtype=torch.bfloat16):
         # Get embeddings
-        model_output = model(**tokens_to_embed)
+        model_output = model(**tokens_to_embed, use_cache=True)
         past_key_values = model_output.past_key_values
         embeddings_key_values = tuple(
             (layer_cache[0][:,:,-emb_toks_len:,:], layer_cache[1][:,:,-emb_toks_len:,:])
@@ -121,5 +166,5 @@ def train(model, conversations, tokenizer, device,
 train(model, conversations, tokenizer, device)
 
 Path('checkpoints').mkdir(exist_ok=True)
-model.save_pretrained(f"checkpoints/final_model")
+model.save_pretrained("checkpoints/final_model")#model.save_pretrained(f"checkpoints/final_model")
 tokenizer.save_pretrained(f"checkpoints/final_model")
