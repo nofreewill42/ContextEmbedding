@@ -36,7 +36,7 @@ def split_tokens(tokens_to_split, tokens_to_split_with):
     tokens_to_split_list = tokens_to_split['input_ids'].tolist()[0]  # shape of [1,:]
     tokens_to_split_with_tokens_list = tokens_to_split_with['input_ids'].tolist()[0]  # shape of [1,:]
     split_with_len = len(tokens_to_split_with_tokens_list)
-    # [[2,3],[0,3],[4,2],[1,7]].index([4,2]) -> 2 (throws a ValueError if not found)
+    # [[2,3],[0,3],[4,2],[1,7]].index([4,2]) -> 2 (throuws a ValueError if not found)
     token_lists_to_check = [tokens_to_split_list[i:i+split_with_len] for i in range(len(tokens_to_split_list) - split_with_len)]
     split_index = token_lists_to_check.index(tokens_to_split_with_tokens_list)
     # Split input_ids and attention_mask
@@ -66,21 +66,13 @@ for conversation in conversations:
                              for layer_cache in past_key_values)
 
     # Prepare cached inputs for generation
-    input_ids = tokens_to_respond['input_ids'][:,:1+emb_toks_len]
-    attention_mask = tokens_to_respond['attention_mask'][:,:1+emb_toks_len]
+    input_ids = tokens_to_respond['input_ids'][:,emb_toks_len:]
+    attention_mask = tokens_to_respond['attention_mask']
     past_key_values = embeddings_key_values
-    result = model.generate(input_ids=input_ids,
-                            attention_mask=attention_mask,
-                            past_key_values=past_key_values,
-                            num_logits_to_keep=1,
-                            use_cache=True,
-                            max_new_tokens=512)
-
-    result_text = tokenizer.decode(result.tolist()[0])
-    print(result_text)
-
-# Example output without fine-tuning:
-    '''
-tokenizer.decode(result.tolist())
-'\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n<|endoftext|><|endoftext|><|fim_prefix|>\n<|endoftext|><|fim_prefix|>\n<|endoftext|>Question: What is the purpose of the `__init__` method in the `Person` class?\n\nAnswer: The `__init__` method is a special method in Python that is called when an object of a class is created. It is used to initialize the attributes of the object. In the `Person` class, the `__init__` method takes two parameters: `name` and `age`, and assigns them to the corresponding attributes of the object. This allows the object to have a name and an age when it is created. The `__init__` method is a constructor in object-oriented programming, which is used to create new instances of a class. It is a fundamental part of object-oriented programming and is used to set up the initial state of an object. The `__init__` method is called automatically when a new object is created, and it is used to initialize the attributes of the object. The `__init__` method is a special method in Python that is called when an object of a class is created. It is used to initialize the attributes of the object. In the `Person` class, the `__init__` method takes two parameters: `name` and `age`, and assigns them to the corresponding attributes of the object. This allows the object to have a name and an age when it is created. The `__init__` method is a constructor in object-oriented programming, which is used to create new instances of a class. It is a fundamental part of object-oriented programming and is used to set up the initial state of an object. The `__init__` method is called automatically when a new object is created, and it is used to initialize the attributes of the object. The `__init__` method is a special method in Python that is called when an object of a class is created. It is used to initialize the attributes of the object. In the `Person` class, the `__init__` method takes two parameters: `name` and `age`, and assigns them to the corresponding attributes of the object. This allows the object to have a name and an age when it is created. The `__init__` method is a constructor in object-oriented programming, which is used to create new instances of a class. It is a fundamental part of object'
-    '''
+    #cache_position = None
+    result = model(input_ids=input_ids,
+                   attention_mask=attention_mask,
+                   past_key_values=past_key_values,
+                   labels=input_ids)
+    loss = result['loss']
+    
