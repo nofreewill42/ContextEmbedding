@@ -16,6 +16,7 @@ venv/
 *.log
 *.tmp
 
+checkpoints/
 
 asd.txt
 asd.py

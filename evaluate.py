@@ -5,7 +5,8 @@ from torch.optim import AdamW
 
 
 # Setup
-model_name = "Qwen/Qwen2.5-Coder-3B-instruct"
+#model_name = "Qwen/Qwen2.5-Coder-3B-instruct"
+model_name = "checkpoints/final_model"
 print(f"Loading model: {model_name}\n")
 model = AutoModelForCausalLM.from_pretrained(model_name)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -24,8 +25,7 @@ system_prompts = {
 conversations = [
     [
         system_prompts['default'],
-        {'role': 'user', 'content': "What color is the sky?\n" + embedding_text + "\n"},
-        {'role': 'assistant', 'content': "Blue (it depends though)"},
+        {'role': 'user', 'content': "What is the color of the sky?\n" + embedding_text + "\n"},
     ],
 ]
 
@@ -53,7 +53,7 @@ def split_tokens(tokens_to_split, tokens_to_split_with):
     return tokens_to_embed, tokens_to_respond
 
 for conversation in conversations:
-    text = tokenizer.apply_chat_template(conversation, tokenize=False)
+    text = tokenizer.apply_chat_template(conversation, tokenize=False, add_generation_prompt=True)
     tokens = tokenizer(text, return_tensors='pt').to(device)
     # Split at embedding_tokens as follows: [*system_and_user_tokens] + [*embedding_tokens] |+ [*assistant_tokens] ; cut at |
     tokens_to_embed, tokens_to_respond = split_tokens(tokens_to_split=tokens, tokens_to_split_with=embedding_tokens)
@@ -74,9 +74,10 @@ for conversation in conversations:
                             past_key_values=past_key_values,
                             num_logits_to_keep=1,
                             use_cache=True,
-                            max_new_tokens=512)
+                            max_new_tokens=32,
+                            eos_token_id=None)
 
-    result_text = tokenizer.decode(result.tolist()[0])
+    result_text = tokenizer.decode(result.tolist())
     print(result_text)
 
 # Example output without fine-tuning:
