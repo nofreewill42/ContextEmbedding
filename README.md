@@ -1,7 +1,7 @@
-# SentenceEmbedding
+# ContextEmbedding
 
 ## Overview
-A project to explore the possibilities with sentence embeddings (sentence, paragraph, document, text).
+A project to explore the possibilities of context embeddings (sentence, paragraph, document, text).
 
 ## Requirements
 - Python 3.10+
